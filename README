@@ -1,0 +1,12 @@
+First, this is done on a Debian chroot, Bookworm in particular, althrough I think Ubuntu Jammy might have worked better in terms of GCC version. But Debian based distros will have screen and lrzsz ready to go from apt.
+Now connect the UART. On the Star64 it's on the 40-pin GPIO at the usual Pi spots. Using a ROCKPro64, RP64 TX to S64 RX, RP64 RX to S64 TX, and GND pin 4 to GND pin 4.
+There is a pair of toggles shown on the Wiki, 0 0 is SPI, 0 1 is SD, and 1 1 is UART. 1 0 is eMMC. For UART boot at 1 1, the basics goes there using that StarFive set of tools.
+### cd to $HOME and run screen
+$ screen -m -S star64 /dev/STAR64_CONSOLE 115200
+### open a second shell and cd to the same $HOME directory you stored your bins
+$ screen -S star64 -X exec \!\! sx jh7110-recovery-20230322.bin
+### option 0 on Star64
+$ screen -S star64 -X exec \!\! sx u-boot-spl.bin.normal.out
+### option 2 on Star64
+$ screen -S star64 -X exec \!\! sx u-boot.itb
+### Then you can press option 5 on the Star64, flip switches back to 0 0 and reset.
