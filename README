@@ -10,3 +10,59 @@ $ screen -S star64 -X exec \!\! sx u-boot-spl.bin.normal.out
 ### option 2 on Star64
 $ screen -S star64 -X exec \!\! sx u-boot.itb
 ### Then you can press option 5 on the Star64, flip switches back to 0 0 and reset.
+
+Making a SD card operating system installation (Alpine Linux).
+Switches are flipped to 0 1 and the experimentations begin.
+Tests show that the BootROM (unlike my heuristics of loading SPL from a offset from Rockchip) just runs whatever is in the first Partition type HiFive BBL it finds.
+No BBL it gives error, finds empty BBL it hangs, runs whatever code is in the BBL, if BBL has the u-boot-spl.bin it will execute the code of that.
+And then the SPL finds a partition type called HiFive FSBL which it will attempt to load OpenSBI and OpenSBI will attempt to load it's payload.
+Therefore first thing I shall do is partition my SD card.
+$ cfdisk /dev/sda
+I make a GPT partition table.
+I add a partition of size 2M and change the Type by scrolling the menu until I find HiFive BBL.
+I add a partition of size 4M and change the Type by scrolling the menu until I find HiFive FSBL.
+I add a third partition of max size and of Type Linux.
+I write and quit.
+$ mkfs.ext4 /dev/sda3
+
+I download StarFive's bootloader recovery tools. https://github.com/starfive-tech/Tools/
+Only thing to be built is that one .c file in spl_tool, seems to have a Makefile so I ran make.
+Then I cloned fishwaldo's u-boot and opensbi. Gotta switch to mainline soon, but they don't seem to have the jh7110-star64 config yet? Fishwaldo said it was COPIED from VF2.
+$ git clone https://github.com/Fishwaldo/u-boot.git
+$ cd u-boot
+$ git checkout c71fa7376f4eaf29e2dc20e5a68418d79201290a
+On my second attempt, I went into .config and added CONFIG_CMD_BOOTZ=y to boot my zImage, AKA vmlinuz.
+$ CROSS_COMPILE=riscv64-linux-gnu- make ARCH=riscv jh7110-pine64-star64_defconfig -j2
+### My 2 A72 cores :P.
+$ CROSS_COMPILE=riscv64-linux-gnu- make ARCH=riscv -j2
+$ cd spl
+$ $HOME/Tools/spl_tool/spl_tool -c -f u-boot-spl.bin
+$ mv *normal.out $HOME
+
+Then I need to do opensbi, but that thing's configuration is more of a can of worms.
+$ cd $HOME && git clone https://github.com/riscv-software-src/opensbi.git
+$ cd opensbi && git checkout 791953030836d39687688a8e7f1a3e708892cfa1
+I found out Debian and Ubuntu built their cross compiler with --with-arch=rv64gc when I think --with-arch=rv64gcb would be it.
+$ make ARCH=riscv PLATFORM=generic \
+                    CROSS_COMPILE=riscv64-linux-gnu- \
+                    FW_FDT_PATH=$HOME/u-boot/dtbs/starfive/jh7110-pine64-star64.dtb \
+                    FW_PAYLOAD_PATH=$HOME/u-boot/u-boot.bin \
+                    PLATFORM_RISCV_XLEN=64 \
+                    PLATFORM_RISCV_ISA=rv64gc \
+                    PLATFORM_RISCV_ABI=lp64d \
+                    FW_TEXT_START=0x40000000 \
+$ find ./ | grep fw_payload
+$ mv fw_payload.bin $HOME/Tools/uboot_its
+$ cd $HOME/Tools/uboot_its
+Modified the cloned its to point to fw_payload.bin.
+$ mkimage -f $MY_ITS -A riscv -O u-boot -T firmware payload.itb
+$ mv payload.itb $HOME
+$ cd $HOME
+$ dd if=u-boot-spl.bin.normal.out of=/dev/sda1 bs=512 conv=notrunc
+$ dd if=payload.itb of=/dev/sda2 conv=notrunc
+
+And there I go, my bootloader's ready. of course, my KERNEL, BOOT.SCR, and OS is not. I tried booting a extlinux.conf and failed. And now I need to recover my kernel cmdline some other day.
+### How I got a OS.
+1. I downloaded Proot-distro's riscv64 alpine xzball.
+$ xzcat alpine.tar.xz | tar -xf - -C /sdcard-part3-mnt
+$ mkdir /sdcard-part3-mnt/boot
