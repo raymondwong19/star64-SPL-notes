@@ -66,3 +66,77 @@ And there I go, my bootloader's ready. of course, my KERNEL, BOOT.SCR, and OS is
 1. I downloaded Proot-distro's riscv64 alpine xzball.
 $ xzcat alpine.tar.xz | tar -xf - -C /sdcard-part3-mnt
 $ mkdir /sdcard-part3-mnt/boot
+
+MAINLINE U-BOOT AND OPENSBI
+I was building Fishwaldo's OpenSBI and U-boot for the Star64. But I am now running mainline. Let's just say, there are differences, but it's not really that much. Variations of the original commands were used.
+$ git clone https://github.com/u-boot/u-boot -> OFFICIAL U-BOOT
+$ cd u-boot
+Now U-boot mainline only has a few extra deps, and builds more files, so it takes longer, it wants Python3 headers, Swig, and Gnutls headers from me.
+$ make ARCH=riscv CROSS_COMPILE=riscv64-linux-gnu- starfive_visionfive2_defconfig
+$ make ARCH=riscv CROSS_COMPILE=riscv64-linux-gnu-
+I did not enable bootz this time, but I did change the default CONFIG_BOOTCOMMAND in .config to "load mmc 1:3 ${loadaddr_?} /boot/boot.scr; source ${loadaddr_?}". Allowed me to instantly boot.
+After Make is done, U-boot will ask me for fw_payload.bin which OpenSBI contains.
+
+$ cd $HOME
+$ git clone $OFFICIAL_OPENSBI (I will remember who owns that).
+$ cd opensbi
+Since I don't have the dtb built nor do I have u-boot.bin built. I just use the old command and omit the payloads.
+$ make ARCH=riscv PLATFORM=generic \
+                    CROSS_COMPILE=riscv64-linux-gnu- \
+                    PLATFORM_RISCV_XLEN=64 \
+                    PLATFORM_RISCV_ISA=rv64gc \
+                    PLATFORM_RISCV_ABI=lp64d \
+                    FW_TEXT_START=0x40000000 \
+Then I get fw_payload.bin.
+
+$ cd $HOME/u-boot
+$ make ARCH=riscv CROSS_COMPILE=riscv64-linux-gnu- OPENSBI_FIRMWARE=fw_payload.bin
+And so my u-boot finished building.
+$ cd $HOME/opensbi
+$ make ARCH=riscv PLATFORM=generic \
+                    CROSS_COMPILE=riscv64-linux-gnu- \
+                    FW_FDT_PATH=$HOME/u-boot/dtbs/starfive/jh7110-pine64-star64.dtb \
+                    FW_PAYLOAD_PATH=$HOME/u-boot/u-boot.bin \
+                    PLATFORM_RISCV_XLEN=64 \
+                    PLATFORM_RISCV_ISA=rv64gc \
+                    PLATFORM_RISCV_ABI=lp64d \
+                    FW_TEXT_START=0x40000000 \
+With that, I just took the u-boot-spl.bin and the fw_payload.bin and used SiFive/StarFive's tools on them to make myself a u-boot-spl.bin.normal.out and a u-boot.itb.
+$ dd if=u-boot-spl.bin.normal.out of=/dev/sda1 bs=512 conv=notrunc
+$ dd if=u-boot.itb of=/dev/sda2 bs=512 conv=notrunc
+
+Now back to OS installation. I don't have a fast machine able to build a new kernel for now, so I have to use the old 5.15.131 Fishwaldo kernel from the old Armbian install.
+$ cp -r fishwaldo-backup/modules /mnt/lib
+$ cp fishwaldo-backup/dtbs/starfive/jh7110-pine64-star64.dtb /mnt/boot/dtb
+$ cp fishwaldo-backup/config /mnt/boot/config
+$ cp fishwaldo-backup/System.map /mnt/boot/System.map
+I admit System.map and config are not strictly necessary anyways.
+Now I don't have the ability to boot a vmlinuz or a initramfs-vanilla. So I need to convert them to the minimal u-boot built uImage and uInitrd. So I went.
+$ mkimage -A riscv -O linux -T kernel -C none -a 0x44000000 -e 0x44000000 -n "Fishwaldo" -d vmlinuz uImage && cp uImage /mnt/boot/uImage
+
+Then I had to plug the SD card into a another RISC-V JH7110 for chrooting.
+I ran
+$ apk add mkinitfs
+$ mkinitfs
+$ mkimage -A riscv -O linux -T ramdisk -C gzip -a 0x48... -e 0x48.... -n "Initramfs" -d initramfs-vanilla /boot/uInitrd
+And I think I will need to do that again to install stuff aside from u-boot-tools.
+I also opened /etc/inittab and uncommented the login for ttyS0 so I can log in via serial.
+
+Made my /boot/boot.cmd
+It contains setenv values copied from uEnv.txt from the Armbian.
+And my setenv bootargs which I won't remember.
+And below them is :
+load mmc 1:3 ${loadaddr} /boot/uImage      # Load the kernel image
+load mmc 1:3 ${fdtaddr} /boot/dtb           # Load the device tree blob
+load mmc 1:3 ${initrdaddr} /boot/uInitrd    # Load the initramfs
+
+bootm ${loadaddr} ${initrdaddr} ${fdtaddr}
+
+# To convert boot.cmd into boot.scr, use the following command:
+# mkimage -A riscv -O linux -T script -C none -d boot.cmd boot.scr
+# To create uImage from vmlinuz:
+# mkimage -A riscv -O linux -T kernel -C gzip -a 0x44000000 -e 0x44000000 -n "Fishwaldo" -d vmlinuz uImage
+# mkimage -A riscv -O linux -T ramdisk -C gzip -a 0x48000000 -e 0x48000000 -n "Initramfs" -d initramfs-vanilla uInitrd
+
+I booted immediately.
+And now I ran into a new issue in which my thing seems to work, but I added ips to eth0 and eth1 and ip link set up them one by one, and yet I never get network access. I need to look into that....
