@@ -87,7 +87,7 @@ $ make ARCH=riscv PLATFORM=generic \
                     PLATFORM_RISCV_ISA=rv64gc \
                     PLATFORM_RISCV_ABI=lp64d \
                     FW_TEXT_START=0x40000000 \
-Then I get fw_payload.bin.
+Then I get fw_payload.bin. And fw_dynamic.bin for passing to u-boot. fw_payload.bin is for the main bootloader.
 
 $ cd $HOME/u-boot
 $ make ARCH=riscv CROSS_COMPILE=riscv64-linux-gnu- OPENSBI=fw_dynamic.bin
