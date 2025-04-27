@@ -45,8 +45,8 @@ $ cd opensbi && git checkout 791953030836d39687688a8e7f1a3e708892cfa1
 I found out Debian and Ubuntu built their cross compiler with --with-arch=rv64gc when I think --with-arch=rv64gcb would be it.
 $ make ARCH=riscv PLATFORM=generic \
                     CROSS_COMPILE=riscv64-linux-gnu- \
-                    FW_FDT_PATH=$HOME/u-boot/dtbs/starfive/jh7110-pine64-star64.dtb \
-                    FW_PAYLOAD_PATH=$HOME/u-boot/u-boot.bin \
+                    FW_FDT_PATH=jh7110-pine64-star64.dtb \
+                    FW_PAYLOAD_PATH=u-boot.bin \
                     PLATFORM_RISCV_XLEN=64 \
                     PLATFORM_RISCV_ISA=rv64gc \
                     PLATFORM_RISCV_ABI=lp64d \
@@ -90,13 +90,13 @@ $ make ARCH=riscv PLATFORM=generic \
 Then I get fw_payload.bin.
 
 $ cd $HOME/u-boot
-$ make ARCH=riscv CROSS_COMPILE=riscv64-linux-gnu- OPENSBI_FIRMWARE=fw_payload.bin
+$ make ARCH=riscv CROSS_COMPILE=riscv64-linux-gnu- OPENSBI=fw_dynamic.bin
 And so my u-boot finished building.
 $ cd $HOME/opensbi
 $ make ARCH=riscv PLATFORM=generic \
                     CROSS_COMPILE=riscv64-linux-gnu- \
-                    FW_FDT_PATH=$HOME/u-boot/dtbs/starfive/jh7110-pine64-star64.dtb \
-                    FW_PAYLOAD_PATH=$HOME/u-boot/u-boot.bin \
+                    FW_FDT_PATH=jh7110-pine64-star64.dtb \
+                    FW_PAYLOAD_PATH=u-boot.bin \
                     PLATFORM_RISCV_XLEN=64 \
                     PLATFORM_RISCV_ISA=rv64gc \
                     PLATFORM_RISCV_ABI=lp64d \
@@ -118,7 +118,7 @@ Then I had to plug the SD card into a another RISC-V JH7110 for chrooting.
 I ran
 $ apk add mkinitfs
 $ mkinitfs
-$ mkimage -A riscv -O linux -T ramdisk -C gzip -a 0x48... -e 0x48.... -n "Initramfs" -d initramfs-vanilla /boot/uInitrd
+$ mkimage -A riscv -O linux -T ramdisk -C none -a 0x48... -e 0x48.... -n "Initramfs" -d initramfs-vanilla /boot/uInitrd
 And I think I will need to do that again to install stuff aside from u-boot-tools.
 I also opened /etc/inittab and uncommented the login for ttyS0 so I can log in via serial.
 
@@ -135,8 +135,8 @@ bootm ${loadaddr} ${initrdaddr} ${fdtaddr}
 # To convert boot.cmd into boot.scr, use the following command:
 # mkimage -A riscv -O linux -T script -C none -d boot.cmd boot.scr
 # To create uImage from vmlinuz:
-# mkimage -A riscv -O linux -T kernel -C gzip -a 0x44000000 -e 0x44000000 -n "Fishwaldo" -d vmlinuz uImage
-# mkimage -A riscv -O linux -T ramdisk -C gzip -a 0x48000000 -e 0x48000000 -n "Initramfs" -d initramfs-vanilla uInitrd
+# mkimage -A riscv -O linux -T kernel -C none -a 0x44000000 -e 0x44000000 -n "Fishwaldo" -d vmlinuz uImage
+# mkimage -A riscv -O linux -T ramdisk -C none -a 0x48000000 -e 0x48000000 -n "Initramfs" -d initramfs-vanilla uInitrd
 
 I booted immediately.
 And now I ran into a new issue in which my thing seems to work, but I added ips to eth0 and eth1 and ip link set up them one by one, and yet I never get network access. I need to look into that....
